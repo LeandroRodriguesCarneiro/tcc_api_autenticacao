@@ -1,0 +1,171 @@
+from typing import Generator
+
+from fastapi import APIRouter, Depends, Form, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy.orm import Session
+
+from ..services.auth_service import AuthService
+from ..database.database import Database
+
+database = Database()
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
+
+def get_auth_service() -> Generator[AuthService, None, None]:
+    """
+    Dependência para fornecer uma instância de AuthService com sessão do banco.
+    """
+    session = database.get_session()
+    try:
+        yield AuthService(session)
+    finally:
+        session.close()
+
+
+class AuthController:
+    router = APIRouter()
+
+    @router.post(
+        "/auth/token",
+        tags=["auth"],
+        summary="Login de usuário",
+        description="Autentica um usuário com email e senha. Retorna um token JWT se autenticado.",
+        responses={
+            200: {
+                "description": "Login realizado com sucesso",
+                "content": {
+                    "application/json": {
+                        "example": {
+                            "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                            "token_type": "bearer"
+                        }
+                    }
+                },
+            },
+            401: {
+                "description": "Usuário ou senha inválidos",
+                "content": {"application/json": {"example": {"detail": "Usuário ou senha inválidos"}}},
+            },
+            422: {"description": "Erro de validação de dados"}
+        },
+    )
+    async def login(
+        username: str = Form(..., description="Email do usuário"),
+        password: str = Form(..., description="Senha do usuário"),
+        auth_service: AuthService = Depends(get_auth_service),
+    ):
+        token = auth_service.authenticate_user(username, password)
+        return {"access_token": token, "token_type": "bearer"}
+
+    @router.post("/auth/refresh", tags=["auth"], summary="Atualiza o access token usando o refresh token")
+    async def refresh_token(
+        refresh_token: str = Form(...),
+        auth_service: AuthService = Depends(get_auth_service),
+    ):
+        token = auth_service.refresh_access_token(refresh_token)
+        return {"access_token": token, "token_type": "bearer"}
+
+    @router.post(
+        "/auth/register",
+        tags=["usuários"],
+        summary="Registrar novo usuário",
+        description="Cria um novo usuário com email, senha e nome completo.",
+        responses={
+            201: {
+                "description": "Usuário criado com sucesso",
+                "content": {
+                    "application/json": {"example": {"message": "Usuário registrado com sucesso"}}
+                },
+            },
+            400: {
+                "description": "Email já cadastrado",
+                "content": {"application/json": {"example": {"detail": "Email já existe"}}},
+            },
+        },
+    )
+    async def register(
+        email: str = Form(..., description="Email do novo usuário"),
+        password: str = Form(..., description="Senha do novo usuário"),
+        full_name: str = Form(..., description="Nome completo do usuário"),
+        token: str = Depends(oauth2_scheme),
+        auth_service: AuthService = Depends(get_auth_service),
+    ):
+        result = auth_service.add_user(email, password, full_name)
+        return result
+
+    @router.put(
+        "/auth/change-password",
+        tags=["usuários"],
+        summary="Alterar senha do usuário",
+        description="Permite ao usuário alterar sua senha fornecendo a senha antiga e a nova.",
+        responses={
+            200: {"description": "Senha alterada com sucesso", "content": {"application/json": {"example": {"message": "Senha alterada com sucesso"}}}},
+            401: {"description": "Senha antiga incorreta", "content": {"application/json": {"example": {"detail": "Senha antiga inválida"}}}},
+        },
+    )
+    async def change_password(
+        old_password: str = Form(..., description="Senha atual do usuário"),
+        new_password: str = Form(..., description="Nova senha"),
+        token: str = Depends(oauth2_scheme),
+        auth_service: AuthService = Depends(get_auth_service),
+    ):
+        user = auth_service.get_user_from_token(token)
+        email = user.email
+        result = auth_service.change_password(email, old_password, new_password)
+        return result
+
+    @router.delete(
+        "/auth/delete-user",
+        tags=["usuários"],
+        summary="Deletar usuário",
+        description="Deleta o usuário autenticado.",
+        responses={
+            200: {"description": "Usuário deletado com sucesso", "content": {"application/json": {"example": {"message": "Usuário deletado com sucesso"}}}},
+            401: {"description": "Usuário não encontrado ou token inválido", "content": {"application/json": {"example": {"detail": "Usuário não encontrado"}}}},
+        },
+    )
+    async def delete_user(
+        token: str = Depends(oauth2_scheme),
+        auth_service: AuthService = Depends(get_auth_service),
+    ):
+        user = auth_service.get_user_from_token(token)
+        email = user.email
+        result = auth_service.delete_user(email)
+        return result
+
+    @router.get(
+        "/auth/me",
+        tags=["auth"],
+        summary="Obter dados do usuário",
+        description="Retorna os dados do usuário autenticado.",
+        responses={
+            200: {
+                "description": "Dados do usuário",
+                "content": {
+                    "application/json": {
+                        "example": {
+                            "id": 1,
+                            "email": "usuario@exemplo.com",
+                            "full_name": "Nome do Usuário",
+                            "is_active": True,
+                            "created_at": "2025-10-27T14:30:00Z",
+                            "updated_at": "2025-10-27T15:00:00Z"
+                        }
+                    }
+                },
+            },
+            401: {"description": "Token inválido ou expirado"},
+        },
+    )
+    async def get_user(
+        token: str = Depends(oauth2_scheme),
+        auth_service: AuthService = Depends(get_auth_service),
+    ):
+        user = auth_service.get_user_from_token(token)
+        return {
+            "id": user.id,
+            "email": user.email,
+            "full_name": user.full_name,
+            "is_active": user.is_active,
+            "created_at": user.created_at,
+            "updated_at": user.updated_at,
+        }
