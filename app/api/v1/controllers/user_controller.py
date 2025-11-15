@@ -4,15 +4,15 @@ from fastapi import APIRouter, Depends, Form, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
-from ..services.auth_service import AuthService
-from ..database.database import Database
+from ....services.auth_service import AuthService
+from ....database.database import Database
 
 from .auth_controller import oauth2_scheme, get_auth_service
 
 class UserController:
     router = APIRouter()
     @router.post(
-        "/user/register",
+        "/register",
         tags=["User"],
         summary="Registrar novo usuário",
         description="Cria um novo usuário com email, senha e nome completo.",
@@ -40,7 +40,7 @@ class UserController:
         return result
 
     @router.put(
-        "/user/change-password",
+        "/change-password",
         tags=["User"],
         summary="Alterar senha do usuário",
         description="Permite ao usuário alterar sua senha fornecendo a senha antiga e a nova.",
@@ -61,7 +61,7 @@ class UserController:
         return result
 
     @router.delete(
-        "/user/delete-user",
+        "/delete-user",
         tags=["User"],
         summary="Deletar usuário",
         description="Deleta o usuário autenticado.",
@@ -80,7 +80,7 @@ class UserController:
         return result
 
     @router.get(
-        "/user/me",
+        "/me",
         tags=["auth"],
         summary="Obter dados do usuário",
         description="Retorna os dados do usuário autenticado.",

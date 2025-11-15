@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends, Form, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
-from ..services import AuthService
-from ..database import Database
+from ....services import AuthService
+from ....database import Database
 
 database = Database()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
@@ -24,7 +24,7 @@ class AuthController:
     router = APIRouter()
 
     @router.post(
-        "/auth/token",
+        "/token",
         tags=["auth"],
         summary="Login de usuário",
         description="Autentica um usuário com email e senha. Retorna um token JWT se autenticado.",
@@ -55,7 +55,7 @@ class AuthController:
         token = auth_service.authenticate_user(username, password)
         return {"access_token": token, "token_type": "bearer"}
 
-    @router.post("/auth/refresh", tags=["auth"], summary="Atualiza o access token usando o refresh token")
+    @router.post("/refresh", tags=["auth"], summary="Atualiza o access token usando o refresh token")
     async def refresh_token(
         refresh_token: str = Form(...),
         auth_service: AuthService = Depends(get_auth_service),
