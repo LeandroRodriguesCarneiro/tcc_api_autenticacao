@@ -53,7 +53,7 @@ class AuthController:
         auth_service: AuthService = Depends(get_auth_service),
     ):
         token = auth_service.authenticate_user(username, password)
-        return {token}
+        return token
 
     @router.post("/refresh", tags=["Auth"], summary="Atualiza o access token usando o refresh token")
     async def refresh_token(
@@ -61,4 +61,4 @@ class AuthController:
         auth_service: AuthService = Depends(get_auth_service),
     ):
         token = auth_service.refresh_access_token(refresh_token)
-        return {"access_token": token, "token_type": "bearer"}
+        return token
